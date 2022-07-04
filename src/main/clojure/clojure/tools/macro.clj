@@ -243,17 +243,26 @@
   [& exprs]
   `(do ~@(doall (map expand-all exprs))))
 
-(defmacro deftemplate
-  "Define a macro that expands into forms after replacing the
-   symbols in params (a vector) by the corresponding parameters
-   given in the macro call."
-  [name params & forms]
-  (let [param-map (for [p params] (list (list 'quote p) (gensym)))
-        template-params (vec (map second param-map))
-        param-map (vec (apply concat param-map))
-        expansion (list 'list (list 'quote `symbol-macrolet) param-map
-                        (list 'quote (cons 'do forms)))]
-    `(defmacro ~name ~template-params ~expansion)))
+(letfn [(template-args [name params forms]
+          (let [param-map (for [p params] (list (list 'quote p) (gensym)))
+                template-params (vec (map second param-map))
+                param-map (vec (apply concat param-map))
+                expansion (list 'list (list 'quote `symbol-macrolet) param-map
+                                (list 'quote (cons 'do forms)))]
+            (list name template-params expansion)))]
+  (defmacro deftemplate
+    "Define a macro that expands into forms after replacing the
+     symbols in params (a vector) by the corresponding parameters
+     given in the macro call."
+    [name params & forms]
+    `(defmacro ~@(template-args name params forms)))
+
+  (defmacro templatelet
+    "templatelet is to deftemplate what macrolet is to defmacro."
+    [fn-bindings & exprs]
+    `(macrolet ~(vec (for [[name args & forms] fn-bindings]
+                       (template-args name args forms)))
+       ~@exprs)))
 
 (defn mexpand-1
   "Like clojure.core/macroexpand-1, but takes into account symbol macros."
