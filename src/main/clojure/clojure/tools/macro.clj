@@ -169,7 +169,7 @@
 (def ^{:private true} special-form-handlers
   {'quote         identity
    'var           identity
-   'def           #(expand-args % 2)
+   'def           #(expand-args % 1)
    'new           #(expand-args % 2)
    'let*          expand-with-bindings
    'letfn*        expand-with-bindings

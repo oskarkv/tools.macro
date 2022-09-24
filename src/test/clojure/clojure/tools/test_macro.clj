@@ -41,7 +41,7 @@
   (is (= (macroexpand-1
            '(macro/symbol-macrolet [def foo]
               (def def def)))
-         '(do (def def foo))))
+         '(do (def foo foo))))
   (is (= (macroexpand-1
            '(macro/symbol-macrolet [x foo z bar]
               (let [a x b y x b] [a b x z])))
