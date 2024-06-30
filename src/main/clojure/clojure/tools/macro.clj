@@ -209,6 +209,11 @@
                                       (map str (filter namespace symbols)))))))
   symbols)
 
+(defn- do-expand [exprs]
+  (if (= 1 (count exprs))
+    (expand-all (first exprs))
+    `(do ~@(doall (map expand-all exprs)))))
+
 (defmacro macrolet
   "Define local macros that are used in the expansion of exprs. The
    syntax is the same as for letfn forms."
@@ -218,7 +223,7 @@
         macro-map  (eval `(letfn ~fn-bindings ~name-map))]
     (binding [macro-fns     (merge macro-fns macro-map)
               macro-symbols (apply dissoc macro-symbols names)]
-      `(do ~@(doall (map expand-all exprs))))))
+      (do-expand exprs))))
 
 (defmacro symbol-macrolet
   "Define local symbol macros that are used in the expansion of exprs.
@@ -228,7 +233,7 @@
         names      (check-not-qualified (keys symbol-map))]
     (binding [macro-fns     (apply dissoc macro-fns names)
               macro-symbols (merge macro-symbols symbol-map)]
-      `(do ~@(doall (map expand-all exprs))))))
+      (do-expand exprs))))
 
 (defmacro defsymbolmacro
   "Define a symbol macro. Because symbol macros are not part of
