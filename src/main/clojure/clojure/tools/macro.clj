@@ -23,7 +23,8 @@
            of another macro, they may be used anywhere. Global symbol
            macros can be used only inside a with-symbol-macros form."}
   clojure.tools.macro
-  [:require clojure.string])
+  (:require clojure.string
+            [com.rpl.specter :as s]))
 
 ; A set of all special forms. Special forms are not macro-expanded, making
 ; it impossible to shadow them by macro definitions. For most special
@@ -241,15 +242,62 @@
 (defmacro with-symbol-macros
   "Fully expand exprs, including symbol macros."
   [& exprs]
-  `(do ~@(doall (map expand-all exprs))))
+  (do-expand exprs))
+
+(defn mexpand-1
+  "Like clojure.core/macroexpand-1, but takes into account symbol macros."
+  [form]
+  (binding [macro-fns {}
+            macro-symbols {}
+            protected-symbols #{}]
+    (expand-1 form)))
+
+(def ^:private symbol-to-remove (gensym))
+
+(defmacro remove-symbol-to-remove
+  "Not part of the API, only for expansions."
+  [code]
+  (s/setval (s/codewalker #{symbol-to-remove}) s/NONE (mexpand-1 code)))
+
+(defn ^:private make-let-to-replace-nils-with-special-symbol [args & body]
+  (let [gen-if (fn [sym] `(if (nil? ~sym) '~symbol-to-remove ~sym))]
+    `(let ~(vec (apply concat (for [arg args]
+                                 [arg (gen-if arg)])))
+       ~@body)))
 
 (letfn [(template-args [name params forms]
-          (let [param-map (for [p params] (list (list 'quote p) (gensym)))
+          (let [forms (if (= 1 (count forms)) (first forms) (cons 'do forms))
+                param-map (for [p params] (list (list 'quote p) (gensym)))
                 template-params (vec (map second param-map))
                 param-map (vec (apply concat param-map))
-                expansion (list `list (list 'quote `symbol-macrolet) param-map
-                                (list 'quote (cons 'do forms)))]
-            (list name template-params expansion)))]
+                body (make-let-to-replace-nils-with-special-symbol
+                      template-params
+                      `(list 'remove-symbol-to-remove
+                            (list 'symbol-macrolet ~param-map '~forms)))]
+            (list name template-params body)))]
+  (defmacro deftemplate-rm-nils
+    "Define a macro that expands into forms after replacing the symbols in
+     params (a vector) by the corresponding parameters given in the
+     macro call. Passing nil into the template will not result in a nil
+     in the expansion, instead it will disappear."
+    [name params & forms]
+    `(defmacro ~@(template-args name params forms)))
+
+  (defmacro templatelet-rm-nils
+    "templatelet-no-nils is to deftemplate-no-nils what macrolet is to
+     defmacro."
+    [fn-bindings & exprs]
+    `(macrolet ~(vec (for [[name args & forms] fn-bindings]
+                       (template-args name args forms)))
+       ~@exprs)))
+
+(letfn [(template-args [name params forms]
+          (let [forms (if (= 1 (count forms)) (first forms) (cons 'do forms))
+                param-map (for [p params] (list (list 'quote p) (gensym)))
+                template-params (vec (map second param-map))
+                param-map (vec (apply concat param-map))
+                body `(list 'symbol-macrolet ~param-map '~forms)]
+            (list name template-params body)))]
   (defmacro deftemplate
     "Define a macro that expands into forms after replacing the
      symbols in params (a vector) by the corresponding parameters
@@ -264,13 +312,6 @@
                        (template-args name args forms)))
        ~@exprs)))
 
-(defn mexpand-1
-  "Like clojure.core/macroexpand-1, but takes into account symbol macros."
-  [form]
-  (binding [macro-fns {}
-            macro-symbols {}
-            protected-symbols #{}]
-    (expand-1 form)))
 
 (defn mexpand
   "Like clojure.core/macroexpand, but takes into account symbol macros."

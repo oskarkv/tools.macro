@@ -1,1 +1,2 @@
-{:paths ["src/main/clojure" "src/test/clojure"]}
+{:paths ["src/main/clojure" "src/test/clojure"]
+ :deps {com.rpl/specter {:local/root "/home/oskar/code/specter"}}}
